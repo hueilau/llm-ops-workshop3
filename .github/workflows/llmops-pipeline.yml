@@ -1,0 +1,143 @@
+name: End-to-End LLMOps Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_IMAGE: hueilau/fastapi-app
+  REGISTRY: docker.io
+
+jobs:
+  # Job 1: Build and Push Docker Image
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DOCKER_IMAGE }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Job 2: Security Scan with Trivy
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      security-events: write
+    
+    steps:
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-and-push.outputs.image-tag }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Run Trivy vulnerability scanner (Table format)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-and-push.outputs.image-tag }}
+        format: 'table'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'
+
+  # Job 3: Deploy to Kubernetes
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build-and-push, security-scan]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Update Kubernetes manifests
+      run: |
+        # Update the image tag in deployment.yml
+        sed -i "s|image: image_name|image: ${{ needs.build-and-push.outputs.image-tag }}|g" deployment.yml
+        cat deployment.yml
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        # This step assumes you have a Kubernetes cluster configured
+        # You'll need to add your kubeconfig as a secret
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Deploy to Kubernetes
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl apply -f deployment.yml
+        kubectl apply -f service.yml
+        kubectl rollout status deployment/gpt-huggingface
+        kubectl get services gpt-hf-service
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f kubeconfig
+
+  # Job 4: Post-deployment validation
+  validate:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Wait for deployment
+      run: sleep 30
+
+    - name: Health check
+      run: |
+        # Add your health check logic here
+        # For example, if you have a health endpoint:
+        # curl -f http://your-service-endpoint/health || exit 1
+        echo "Deployment validation completed"

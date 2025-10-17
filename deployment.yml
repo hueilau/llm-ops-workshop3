@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gpt-huggingface
+  labels:
+    app: gpt-huggingface
 spec:
   replicas: 3
   selector:
@@ -12,8 +14,36 @@ spec:
       labels:
         app: gpt-hf-pod
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: gptcontainer
         image: image_name
         ports:
         - containerPort: 8000
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+            storage: "1Gi"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL

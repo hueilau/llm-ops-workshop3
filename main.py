@@ -24,6 +24,16 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "FastAPI QA Service"}
+
+# Root endpoint
+@app.get("/")
+async def root():
+    return {"message": "Welcome to FastAPI Question-Answering Service"}
+
 # Creating the /chat endpoint
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
