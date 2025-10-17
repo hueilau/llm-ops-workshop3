@@ -77,14 +77,35 @@ kubectl rollout status deployment/gpt-huggingface
 kubectl get services gpt-hf-service
 ```
 
+## 🧪 AI Safety & Testing
+
+### Comprehensive Testing Strategy
+- **Unit Tests**: API functionality, error handling, performance
+- **Hallucination Detection**: Prevents false information generation
+- **Bias Testing**: Detects gender, cultural, and demographic biases
+- **Context Grounding**: Ensures answers align with provided context
+
+### Running Tests Locally
+```bash
+# Unit tests
+pytest test_main.py -v --cov=main
+
+# AI Safety tests (requires service running)
+python main.py &
+./run-promptfoo-tests.sh
+```
+
+See [TESTING.md](TESTING.md) for detailed testing documentation.
+
 ## 🔄 CI/CD Pipeline
 
 The GitHub Actions workflow automatically:
 
-1. **Build & Push**: Creates Docker image and pushes to Docker Hub
-2. **Security Scan**: Scans image with Trivy for vulnerabilities
-3. **Deploy**: Deploys to Kubernetes cluster
-4. **Validate**: Performs post-deployment health checks
+1. **Test**: Unit tests and AI safety validation (Promptfoo)
+2. **Build & Push**: Creates Docker image and pushes to Docker Hub  
+3. **Security Scan**: Scans image with Trivy for vulnerabilities
+4. **Deploy**: Deploys to Kubernetes cluster
+5. **Validate**: Post-deployment safety and health checks
 
 ## 📊 API Endpoints
 

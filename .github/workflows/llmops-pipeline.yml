@@ -11,9 +11,62 @@ env:
   REGISTRY: docker.io
 
 jobs:
-  # Job 1: Build and Push Docker Image
+  # Job 1: Unit Tests and Quality Checks
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run unit tests
+      run: |
+        python -m pytest test_main.py -v --tb=short
+
+    - name: Install Node.js for Promptfoo
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Promptfoo
+      run: |
+        npm install -g promptfoo
+
+    - name: Start FastAPI service for testing
+      run: |
+        python main.py &
+        sleep 10
+        curl -f http://localhost:8000/health || exit 1
+      timeout-minutes: 2
+
+    - name: Run Promptfoo hallucination and bias tests
+      run: |
+        promptfoo eval -c promptfoo.yaml --output promptfoo-results.json
+      timeout-minutes: 5
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          promptfoo-results.json
+          pytest-report.xml
+
+  # Job 2: Build and Push Docker Image
   build-and-push:
     runs-on: ubuntu-latest
+    needs: test
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -54,7 +107,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-  # Job 2: Security Scan with Trivy
+  # Job 3: Security Scan with Trivy
   security-scan:
     runs-on: ubuntu-latest
     needs: build-and-push
@@ -83,7 +136,7 @@ jobs:
         severity: 'CRITICAL,HIGH'
         exit-code: '1'
 
-  # Job 3: Deploy to Kubernetes
+  # Job 4: Deploy to Kubernetes
   deploy:
     runs-on: ubuntu-latest
     needs: [build-and-push, security-scan]
@@ -125,19 +178,66 @@ jobs:
       run: |
         rm -f kubeconfig
 
-  # Job 4: Post-deployment validation
+  # Job 5: Post-deployment validation
   validate:
     runs-on: ubuntu-latest
     needs: deploy
     if: github.ref == 'refs/heads/main'
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Wait for deployment
       run: sleep 30
 
+    - name: Install Node.js for Promptfoo
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Promptfoo
+      run: npm install -g promptfoo
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Get service endpoint
+      run: |
+        export KUBECONFIG=kubeconfig
+        # Get the NodePort service endpoint
+        NODE_PORT=$(kubectl get service gpt-hf-service -o jsonpath='{.spec.ports[0].nodePort}')
+        # For cloud environments, you might need to get the external IP
+        # SERVICE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+        # For local testing, use localhost or cluster IP
+        SERVICE_IP="localhost"
+        echo "SERVICE_ENDPOINT=http://${SERVICE_IP}:${NODE_PORT}" >> $GITHUB_ENV
+
     - name: Health check
       run: |
-        # Add your health check logic here
-        # For example, if you have a health endpoint:
-        # curl -f http://your-service-endpoint/health || exit 1
-        echo "Deployment validation completed"
+        echo "Testing endpoint: $SERVICE_ENDPOINT"
+        curl -f $SERVICE_ENDPOINT/health || exit 1
+        echo "✅ Health check passed"
+
+    - name: Run production Promptfoo tests
+      run: |
+        # Update promptfoo config to use deployed service
+        sed -i "s|http://localhost:8000|$SERVICE_ENDPOINT|g" promptfoo.yaml
+        
+        # Run subset of critical tests in production
+        promptfoo eval -c promptfoo.yaml --output production-promptfoo-results.json
+        
+        echo "🧪 Production AI safety tests completed"
+
+    - name: Upload production test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: production-test-results
+        path: production-promptfoo-results.json
+
+    - name: Cleanup
+      if: always()
+      run: rm -f kubeconfig
