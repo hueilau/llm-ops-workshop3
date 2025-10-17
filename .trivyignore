@@ -1,0 +1,34 @@
+# Trivy ignore file
+# Use this file to suppress false positives or accepted risks
+
+# Example: Ignore specific CVEs that are accepted risks
+# CVE-2019-1234
+
+# Ignore low severity issues in development dependencies
+# LOW severity issues in test files
+**/test_*.py
+
+# Ignore issues in virtual environments
+ai-env/**
+venv/**
+.venv/**
+
+# Ignore issues in cache directories
+__pycache__/**
+.pytest_cache/**
+htmlcov/**
+
+# Ignore issues in documentation
+*.md
+docs/**
+
+# Ignore Git related files
+.git/**
+.github/**
+
+# Ignore Node.js modules if any
+node_modules/**
+
+# Example of ignoring specific packages with known issues
+# (Uncomment and modify as needed)
+# python:3.9-slim CVE-2021-44228  # Log4j vulnerability not applicable to Python base image

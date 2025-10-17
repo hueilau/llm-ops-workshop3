@@ -125,6 +125,13 @@ Thumbs.db
 .promptfoo/
 promptfoo-results.json
 production-promptfoo-results.json
+local-test-results.json
+
+# Security scanning reports
+security-reports/
+trivy-*.sarif
+trivy-*.json
+trivy-*.txt
 
 # Kubernetes
 kubeconfig

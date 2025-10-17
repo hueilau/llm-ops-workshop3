@@ -1,0 +1,87 @@
+# Trivy configuration file for comprehensive security scanning
+# This file defines scanning policies and rules for the LLMOps pipeline
+
+# Global settings
+timeout: "10m"
+quiet: false
+debug: false
+
+# Scan settings
+scan:
+  # Skip files/directories matching these patterns
+  skip-dirs:
+    - ".git"
+    - "node_modules"
+    - "__pycache__"
+    - ".pytest_cache"
+    - "htmlcov"
+    - "ai-env"
+    - "venv"
+
+  # Skip files matching these patterns  
+  skip-files:
+    - "*.pyc"
+    - "*.pyo"
+    - "*.log"
+    - "*.tmp"
+
+# Vulnerability settings
+vulnerability:
+  # Vulnerability types to detect
+  type:
+    - "os"
+    - "library"
+  
+  # Severity levels to include
+  severity:
+    - "UNKNOWN"
+    - "LOW" 
+    - "MEDIUM"
+    - "HIGH"
+    - "CRITICAL"
+
+# Secret scanning settings
+secret:
+  # Skip secret detection for these paths
+  skip-paths:
+    - ".git/"
+    - "test_*"
+    - "*.md"
+
+# License scanning
+license:
+  # License types to flag as issues
+  full: true
+  ignored:
+    - "MIT"
+    - "Apache-2.0"
+    - "BSD-3-Clause"
+    - "BSD-2-Clause"
+    - "ISC"
+
+# Misconfiguration scanning
+misconfiguration:
+  # Include Terraform, Kubernetes, Docker configs
+  include-non-failures: false
+  
+  # Trace misconfiguration detection
+  trace: false
+
+# Output formatting
+format: "table"
+
+# Report settings  
+report:
+  # Include suppressed vulnerabilities in report
+  ignore-unfixed: false
+  
+  # Exit with error code if vulnerabilities found
+  exit-code: 0  # Don't fail the build by default
+
+# Cache settings
+cache:
+  # Clear cache before scanning
+  clear: false
+  
+  # Cache directory
+  dir: "/tmp/trivy"

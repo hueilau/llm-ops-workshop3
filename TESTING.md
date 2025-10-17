@@ -2,6 +2,27 @@
 
 This document outlines our comprehensive testing approach for the FastAPI QA service, focusing on hallucination detection, bias prevention, and quality assurance.
 
+## 🛡️ Security Scanning with Trivy
+
+### Comprehensive Security Testing
+**File:** `run-trivy-scan.sh` and `trivy.yaml`
+
+**Coverage Areas:**
+- ✅ **Vulnerability Scanning**: OS and library vulnerabilities
+- ✅ **Container Security**: Docker image vulnerability assessment
+- ✅ **Configuration Security**: Kubernetes and Docker config validation
+- ✅ **Secret Detection**: Exposed credentials and sensitive data
+- ✅ **License Compliance**: Open source license validation
+- ✅ **Infrastructure as Code**: Security policy validation
+
+**Security Scan Categories:**
+```bash
+./run-trivy-scan.sh     # Comprehensive local security scan
+trivy image <image>     # Docker image vulnerabilities
+trivy config .          # Configuration issues
+trivy fs --scanners secret .  # Secret detection
+```
+
 ## 🧪 Testing Framework Overview
 
 ### 1. Unit Testing with Pytest
@@ -100,9 +121,10 @@ The GitHub Actions workflow automatically runs:
 
 1. **Unit Tests** → Fast feedback on code quality
 2. **Promptfoo AI Safety Tests** → Comprehensive bias/hallucination detection
-3. **Docker Build & Security Scan** → Container security
-4. **Kubernetes Deployment** → Infrastructure deployment
-5. **Production Validation** → Post-deployment safety checks
+3. **Trivy Security Scanning** → Multi-layer security validation
+4. **Docker Build & Security Scan** → Container security
+5. **Kubernetes Deployment** → Infrastructure deployment
+6. **Production Validation** → Post-deployment safety checks
 
 ## 📊 Test Metrics & Thresholds
 
@@ -121,7 +143,9 @@ The GitHub Actions workflow automatically runs:
 
 ### Pre-deployment Checks
 - ✅ All unit tests pass
-- ✅ No high/critical security vulnerabilities
+- ✅ No high/critical security vulnerabilities (Trivy)
+- ✅ No exposed secrets or credentials
+- ✅ Kubernetes configurations are secure
 - ✅ Bias detection tests pass at 100%
 - ✅ Hallucination tests pass at 90%
 

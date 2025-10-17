@@ -77,6 +77,29 @@ kubectl rollout status deployment/gpt-huggingface
 kubectl get services gpt-hf-service
 ```
 
+## 🛡️ Security Scanning with Trivy
+
+### Comprehensive Security Coverage
+- **Filesystem Scanning**: Detects vulnerabilities in dependencies and libraries
+- **Docker Image Scanning**: Scans container images for known vulnerabilities
+- **Configuration Scanning**: Validates Kubernetes manifests and Docker configs
+- **Secret Detection**: Finds exposed credentials and sensitive data
+- **License Scanning**: Identifies license compliance issues
+
+### Running Security Scans Locally
+```bash
+# Comprehensive security scan
+./run-trivy-scan.sh
+
+# Quick Docker image scan
+trivy image hueilau/llm-ops-workshop3:latest
+
+# Scan Kubernetes manifests
+trivy config deployment.yml service.yml
+```
+
+See security reports in `./security-reports/` directory.
+
 ## 🧪 AI Safety & Testing
 
 ### Comprehensive Testing Strategy
@@ -103,7 +126,7 @@ The GitHub Actions workflow automatically:
 
 1. **Test**: Unit tests and AI safety validation (Promptfoo)
 2. **Build & Push**: Creates Docker image and pushes to Docker Hub  
-3. **Security Scan**: Scans image with Trivy for vulnerabilities
+3. **Security Scan**: Comprehensive Trivy scanning (filesystem, image, config, secrets)
 4. **Deploy**: Deploys to Kubernetes cluster
 5. **Validate**: Post-deployment safety and health checks
 

@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  DOCKER_IMAGE: hueilau/llm-ops-workshop3
+  DOCKER_IMAGE: hueilau33/llm-ops-workshop3
   REGISTRY: docker.io
 
 jobs:
@@ -128,28 +128,81 @@ jobs:
     needs: build-and-push
     permissions:
       security-events: write
+      actions: read
+      contents: read
     
     steps:
-    - name: Run Trivy vulnerability scanner
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy filesystem scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-fs-results.sarif'
+
+    - name: Upload Trivy filesystem scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-fs-results.sarif'
+
+    - name: Run Trivy filesystem scan (Table format)
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Run Trivy image vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ needs.build-and-push.outputs.image-tag }}
         format: 'sarif'
-        output: 'trivy-results.sarif'
+        output: 'trivy-image-results.sarif'
 
-    - name: Upload Trivy scan results to GitHub Security tab
+    - name: Upload Trivy image scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v2
       if: always()
       with:
-        sarif_file: 'trivy-results.sarif'
+        sarif_file: 'trivy-image-results.sarif'
 
-    - name: Run Trivy vulnerability scanner (Table format)
+    - name: Run Trivy image vulnerability scanner (Table format)
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ needs.build-and-push.outputs.image-tag }}
         format: 'table'
         severity: 'CRITICAL,HIGH'
         exit-code: '1'
+
+    - name: Run Trivy configuration scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'config'
+        scan-ref: '.'
+        format: 'table'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Run Trivy secret scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        scanners: 'secret'
+        format: 'table'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Upload security scan artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: trivy-security-reports
+        path: |
+          trivy-fs-results.sarif
+          trivy-image-results.sarif
 
   # Job 4: Deploy to Kubernetes
   deploy:
