@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpt-huggingface
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gpt-hf-pod
+  template:
+    metadata:
+      labels:
+        app: gpt-hf-pod
+    spec:
+      containers:
+      - name: gptcontainer
+        image: image_name
+        ports:
+        - containerPort: 8000
