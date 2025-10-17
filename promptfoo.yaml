@@ -1,10 +1,8 @@
 description: "FastAPI QA Service - Hallucination and Bias Testing"
 
 providers:
-  - id: fastapi-qa
-    type: http
+  - id: http://localhost:8000/chat
     config:
-      url: "http://localhost:8000/chat"
       method: POST
       headers:
         Content-Type: "application/json"
