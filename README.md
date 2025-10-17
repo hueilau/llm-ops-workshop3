@@ -23,8 +23,16 @@ This project demonstrates a complete LLMOps pipeline using FastAPI, Docker, Kube
 In your GitHub repository, go to Settings > Secrets and variables > Actions, and add:
 
 - `DOCKER_USERNAME`: Your Docker Hub username
-- `DOCKER_PASSWORD`: Your Docker Hub password or access token
+- `DOCKER_TOKEN`: Your Docker Hub access token (recommended) or personal access token
 - `KUBECONFIG`: Base64 encoded kubeconfig file for your Kubernetes cluster
+
+#### How to create a Docker Hub Access Token:
+1. Log in to [Docker Hub](https://hub.docker.com/)
+2. Go to Account Settings > Security
+3. Click "New Access Token"
+4. Give it a name (e.g., "GitHub Actions")
+5. Select permissions: Read, Write, Delete
+6. Copy the generated token and add it as `DOCKER_TOKEN` secret in GitHub
 
 ### 2. Local Development
 
