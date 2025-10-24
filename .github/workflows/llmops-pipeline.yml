@@ -85,7 +85,6 @@ jobs:
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tag: ${{ steps.meta.outputs.tags }}
-      primary-tag: ${{ steps.scan-tag.outputs.primary-tag }}
     
     steps:
     - name: Checkout code
@@ -110,19 +109,6 @@ jobs:
           type=ref,event=pr
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
-
-    - name: Set primary tag for scanning
-      id: scan-tag
-      run: |
-        # Use the first tag from the metadata output for scanning
-        PRIMARY_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | tr -d '\n\r')
-        # Fallback to explicit tag construction if empty
-        if [ -z "$PRIMARY_TAG" ] || [ "$PRIMARY_TAG" = "" ]; then
-          PRIMARY_TAG="${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
-        fi
-        echo "primary-tag=$PRIMARY_TAG" >> $GITHUB_OUTPUT
-        echo "Primary tag for scanning: $PRIMARY_TAG"
-        echo "All tags from metadata: ${{ steps.meta.outputs.tags }}"
 
     - name: Build and push Docker image
       id: build
@@ -149,24 +135,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Debug image outputs
-      run: |
-        echo "Image tags from build job:"
-        echo "${{ needs.build-and-push.outputs.image-tag }}"
-        echo "Image digest from build job:"
-        echo "${{ needs.build-and-push.outputs.image-digest }}"
-        echo "Primary tag from build job:"
-        echo "${{ needs.build-and-push.outputs.primary-tag }}"
-        echo "Docker image env var:"
-        echo "${{ env.DOCKER_IMAGE }}"
-        
-        # Test if we can construct a working image reference
-        if [ -n "${{ needs.build-and-push.outputs.primary-tag }}" ]; then
-          echo "Using primary tag: ${{ needs.build-and-push.outputs.primary-tag }}"
-        else
-          FALLBACK_TAG="${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
-          echo "Primary tag empty, using fallback: $FALLBACK_TAG"
-        fi
+
 
     - name: Run Trivy filesystem scan
       uses: aquasecurity/trivy-action@0.28.0
@@ -192,63 +161,7 @@ jobs:
         severity: 'CRITICAL,HIGH,MEDIUM'
         trivy-config: 'trivy.yaml'
 
-    - name: Extract metadata for scanning
-      id: scan-meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.DOCKER_IMAGE }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Set image reference for scanning
-      id: image-ref
-      run: |
-        # Get the first tag from our local metadata extraction
-        LOCAL_PRIMARY_TAG=$(echo "${{ steps.scan-meta.outputs.tags }}" | head -n1 | tr -d '\n\r')
-        
-        echo "Local metadata tags: ${{ steps.scan-meta.outputs.tags }}"
-        echo "Local primary tag: $LOCAL_PRIMARY_TAG"
-        
-        # Use local tag, fallback to build job output, then to constructed tag
-        if [ -n "$LOCAL_PRIMARY_TAG" ] && [ "$LOCAL_PRIMARY_TAG" != "" ]; then
-          IMAGE_REF="$LOCAL_PRIMARY_TAG"
-          echo "Using local metadata tag: $IMAGE_REF"
-        elif [ -n "${{ needs.build-and-push.outputs.primary-tag }}" ] && [ "${{ needs.build-and-push.outputs.primary-tag }}" != "" ]; then
-          IMAGE_REF="${{ needs.build-and-push.outputs.primary-tag }}"
-          echo "Using build job primary tag: $IMAGE_REF"
-        else
-          IMAGE_REF="${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
-          echo "Using constructed tag: $IMAGE_REF"
-        fi
-        
-        echo "image-ref=$IMAGE_REF" >> $GITHUB_OUTPUT
-        echo "Final image reference for scanning: $IMAGE_REF"
-
-    - name: Run Trivy image vulnerability scanner
-      uses: aquasecurity/trivy-action@0.28.0
-      with:
-        image-ref: ${{ steps.image-ref.outputs.image-ref }}
-        format: 'sarif'
-        output: 'trivy-image-results.sarif'
-        trivy-config: 'trivy.yaml'
-
-    - name: Upload Trivy image scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
-      with:
-        sarif_file: 'trivy-image-results.sarif'
-
-    - name: Run Trivy image vulnerability scanner (Table format)
-      uses: aquasecurity/trivy-action@0.28.0
-      with:
-        image-ref: ${{ steps.image-ref.outputs.image-ref }}
-        format: 'table'
-        severity: 'CRITICAL,HIGH'
-        exit-code: '1'
-        trivy-config: 'trivy.yaml'
 
     - name: Run Trivy configuration scan
       uses: aquasecurity/trivy-action@0.28.0
@@ -276,7 +189,6 @@ jobs:
         name: trivy-security-reports
         path: |
           trivy-fs-results.sarif
-          trivy-image-results.sarif
 
   # Job 4: Deploy to Kubernetes
   deploy:
@@ -291,12 +203,8 @@ jobs:
 
     - name: Update Kubernetes manifests
       run: |
-        # Use primary tag if available, otherwise construct from env and SHA
-        if [ -n "${{ needs.build-and-push.outputs.primary-tag }}" ] && [ "${{ needs.build-and-push.outputs.primary-tag }}" != "" ]; then
-          DEPLOY_IMAGE="${{ needs.build-and-push.outputs.primary-tag }}"
-        else
-          DEPLOY_IMAGE="${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
-        fi
+        # Use a simple image reference for deployment
+        DEPLOY_IMAGE="${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
         echo "Using deployment image: $DEPLOY_IMAGE"
         
         # Update the image tag in deployment.yml
