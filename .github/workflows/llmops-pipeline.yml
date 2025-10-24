@@ -217,20 +217,69 @@ jobs:
       with:
         version: 'v1.28.0'
 
-    - name: Configure kubectl
+    - name: Check for Kubernetes configuration
+      id: k8s-check
       run: |
-        # This step assumes you have a Kubernetes cluster configured
-        # You'll need to add your kubeconfig as a secret
+        if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+          echo "No KUBECONFIG secret found. Skipping Kubernetes deployment."
+          echo "To enable Kubernetes deployment, add KUBECONFIG secret to repository."
+          echo "has-kubeconfig=false" >> $GITHUB_OUTPUT
+        else
+          echo "KUBECONFIG found. Proceeding with deployment."
+          echo "has-kubeconfig=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Configure kubectl
+      if: steps.k8s-check.outputs.has-kubeconfig == 'true'
+      run: |
+        # Decode and set up kubeconfig
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
         export KUBECONFIG=kubeconfig
+        echo "KUBECONFIG=kubeconfig" >> $GITHUB_ENV
 
-    - name: Deploy to Kubernetes
+    - name: Test cluster connectivity
+      if: steps.k8s-check.outputs.has-kubeconfig == 'true'
       run: |
         export KUBECONFIG=kubeconfig
+        # Test if we can connect to the cluster
+        if ! kubectl cluster-info >/dev/null 2>&1; then
+          echo "❌ Unable to connect to Kubernetes cluster"
+          echo "Please check your KUBECONFIG secret and cluster status"
+          exit 1
+        fi
+        echo "✅ Successfully connected to Kubernetes cluster"
+        kubectl version --short
+
+    - name: Deploy to Kubernetes
+      if: steps.k8s-check.outputs.has-kubeconfig == 'true'
+      run: |
+        export KUBECONFIG=kubeconfig
+        echo "🚀 Deploying to Kubernetes..."
+        
         kubectl apply -f deployment.yml
         kubectl apply -f service.yml
-        kubectl rollout status deployment/gpt-huggingface
+        
+        echo "📊 Checking rollout status..."
+        kubectl rollout status deployment/gpt-huggingface --timeout=300s
+        
+        echo "🔍 Getting service information..."
         kubectl get services gpt-hf-service
+        
+        echo "✅ Deployment completed successfully"
+
+    - name: Skip deployment notice
+      if: steps.k8s-check.outputs.has-kubeconfig == 'false'
+      run: |
+        echo "🔄 Kubernetes deployment was skipped"
+        echo ""
+        echo "To enable Kubernetes deployment:"
+        echo "1. Set up a Kubernetes cluster"
+        echo "2. Add KUBECONFIG as a repository secret (base64 encoded)"
+        echo "3. Re-run the pipeline"
+        echo ""
+        echo "📦 Docker image was built and pushed successfully"
+        echo "🛡️  Security scans completed"
+        echo "✅ Pipeline completed without deployment"
 
     - name: Cleanup
       if: always()
@@ -247,23 +296,39 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check if deployment was successful
+      id: deploy-check
+      run: |
+        if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+          echo "No KUBECONFIG found. Skipping validation."
+          echo "has-deployment=false" >> $GITHUB_OUTPUT
+        else
+          echo "KUBECONFIG found. Proceeding with validation."
+          echo "has-deployment=true" >> $GITHUB_OUTPUT
+        fi
+
     - name: Wait for deployment
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       run: sleep 30
 
     - name: Install Node.js for Promptfoo
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: '18'
 
     - name: Install Promptfoo
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       run: npm install -g promptfoo@latest
 
     - name: Configure kubectl
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       run: |
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
         export KUBECONFIG=kubeconfig
 
     - name: Get service endpoint
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       run: |
         export KUBECONFIG=kubeconfig
         # Get the NodePort service endpoint
@@ -275,12 +340,14 @@ jobs:
         echo "SERVICE_ENDPOINT=http://${SERVICE_IP}:${NODE_PORT}" >> $GITHUB_ENV
 
     - name: Health check
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       run: |
         echo "Testing endpoint: $SERVICE_ENDPOINT"
         curl -f $SERVICE_ENDPOINT/health || exit 1
         echo "✅ Health check passed"
 
     - name: Run production Promptfoo tests
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       run: |
         # Update promptfoo config to use deployed service
         sed -i "s|http://localhost:8000|$SERVICE_ENDPOINT|g" promptfoo-simple.yaml
@@ -291,11 +358,29 @@ jobs:
         echo "🧪 Production AI safety tests completed"
 
     - name: Upload production test results
+      if: steps.deploy-check.outputs.has-deployment == 'true'
       uses: actions/upload-artifact@v4
-      if: always()
       with:
         name: production-test-results
         path: production-promptfoo-results.json
+
+    - name: Skip validation notice
+      if: steps.deploy-check.outputs.has-deployment == 'false'
+      run: |
+        echo "🔄 Post-deployment validation was skipped"
+        echo ""
+        echo "Reason: No Kubernetes cluster configured"
+        echo ""
+        echo "✅ Pipeline completed successfully:"
+        echo "  📋 Unit tests passed"
+        echo "  🧪 AI safety tests completed"
+        echo "  📦 Docker image built and pushed"
+        echo "  🛡️  Security scans completed"
+        echo ""
+        echo "To enable deployment and validation:"
+        echo "1. Set up a Kubernetes cluster"
+        echo "2. Add KUBECONFIG as a repository secret"
+        echo "3. Re-run the pipeline"
 
     - name: Cleanup
       if: always()
