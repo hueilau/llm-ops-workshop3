@@ -6,39 +6,35 @@ timeout: "10m"
 quiet: false
 debug: false
 
-# Scan settings
-scan:
-  # Skip files/directories matching these patterns
-  skip-dirs:
-    - ".git"
-    - "node_modules"
-    - "__pycache__"
-    - ".pytest_cache"
-    - "htmlcov"
-    - "ai-env"
-    - "venv"
+# Scan settings - using skip-dirs and skip-files at root level
+skip-dirs:
+  - ".git"
+  - "node_modules"
+  - "__pycache__"
+  - ".pytest_cache"
+  - "htmlcov"
+  - "ai-env"
+  - "venv"
 
-  # Skip files matching these patterns  
-  skip-files:
-    - "*.pyc"
-    - "*.pyo"
-    - "*.log"
-    - "*.tmp"
+skip-files:
+  - "*.pyc"
+  - "*.pyo"
+  - "*.log"
+  - "*.tmp"
 
-# Vulnerability settings
-vulnerability:
-  # Vulnerability types to detect
-  type:
+# Package types to scan (replaces deprecated vulnerability.type)
+pkg:
+  types:
     - "os"
     - "library"
-  
-  # Severity levels to include
-  severity:
-    - "UNKNOWN"
-    - "LOW" 
-    - "MEDIUM"
-    - "HIGH"
-    - "CRITICAL"
+
+# Severity levels to include
+severity:
+  - "UNKNOWN"
+  - "LOW" 
+  - "MEDIUM"
+  - "HIGH"
+  - "CRITICAL"
 
 # Secret scanning settings
 secret:
@@ -71,17 +67,11 @@ misconfiguration:
 format: "table"
 
 # Report settings  
-report:
-  # Include suppressed vulnerabilities in report
-  ignore-unfixed: false
-  
-  # Exit with error code if vulnerabilities found
-  exit-code: 0  # Don't fail the build by default
+report-type: "all"
+ignore-unfixed: false
+exit-code: 0  # Don't fail the build by default
 
-# Cache settings
+# Cache settings  
 cache:
-  # Clear cache before scanning
-  clear: false
-  
   # Cache directory
   dir: "/tmp/trivy"
